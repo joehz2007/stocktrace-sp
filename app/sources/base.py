@@ -1,12 +1,35 @@
+import time
+
 import requests
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (StockTrace)"}
+_RETRIES = 3
+_BACKOFF = 0.6  # seconds, multiplied by attempt number
+
+
+def _get(url: str, *, params, timeout, headers) -> requests.Response:
+    """GET with a few retries — these data APIs (and flaky egress proxies)
+    intermittently reset connections; a couple of backed-off retries make real
+    runs far more reliable without masking genuine 4xx/5xx responses."""
+    last_exc = None
+    for attempt in range(1, _RETRIES + 1):
+        try:
+            resp = requests.get(url, params=params, timeout=timeout,
+                                 headers={**_HEADERS, **(headers or {})})
+            resp.raise_for_status()
+            return resp
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_exc = exc  # transient: connection reset / proxy drop / timeout
+            if attempt < _RETRIES:
+                time.sleep(_BACKOFF * attempt)
+        except requests.HTTPError:
+            raise  # genuine 4xx/5xx — do not retry
+    raise last_exc
 
 
 def http_get(url: str, *, params: dict | None = None, timeout: float = 10.0,
              headers: dict | None = None, encoding: str | None = None) -> str:
-    resp = requests.get(url, params=params, timeout=timeout, headers={**_HEADERS, **(headers or {})})
-    resp.raise_for_status()
+    resp = _get(url, params=params, timeout=timeout, headers=headers)
     if encoding:
         resp.encoding = encoding
     return resp.text
@@ -14,6 +37,4 @@ def http_get(url: str, *, params: dict | None = None, timeout: float = 10.0,
 
 def http_get_json(url: str, *, params: dict | None = None, timeout: float = 10.0,
                   headers: dict | None = None) -> dict:
-    resp = requests.get(url, params=params, timeout=timeout, headers={**_HEADERS, **(headers or {})})
-    resp.raise_for_status()
-    return resp.json()
+    return _get(url, params=params, timeout=timeout, headers=headers).json()
