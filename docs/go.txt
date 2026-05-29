@@ -1,0 +1,18 @@
+我有一份写好的需求，请按以下流程开发：
+
+  == 需求 ==
+   项目需求： ./docs/requirements.md
+
+  == 工作流偏好 ==
+  1. 使用 brainstorming —— 进一步澄清需求
+  2. 然后进入 writing-plans 生成计划，给我看一眼
+  3. 我说 "go" 后用 subagent-driven-development 一路跑完
+     中途不要 checkpoint 回我，子 agent 自己做两阶段评审
+  4. 完成后用 finishing-a-development-branch，建议 PR 流程
+
+  == 预授权 ==
+  - .worktrees/ 下创建 worktree，不需要再次询问
+  - 所有 bash/edit 操作免确认（已用 --dangerously-skip-permissions 启动）
+  - 完成时如果有冲突或意外，再回来问我；否则一路跑
+
+  开始吧。
