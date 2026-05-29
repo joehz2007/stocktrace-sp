@@ -114,8 +114,8 @@ uv run pytest
 |---|---|
 | 腾讯(行情/搜索/指数) | ✅ 实测核准。字段位与单位经真实数据验证:`amount_wan` 万元、`market_cap_yi`[45]/`float_market_cap_yi`[44] 亿元(用总市值≥流通市值的国有大盘股区分确认)、`pe_static`[53](经茅台 EPS 反算确认) |
 | 新浪(财报三表) | ✅ 实测核准。tab 分隔 CSV,标签 `资产总计/负债合计/归属于母公司股东权益合计/归属于母公司所有者的净利润` 命中。**已修复**:新浪日期为 `YYYYMMDD`,归一化为 `YYYY-MM-DD`,否则 `metrics._report_month` 取错月份致 ROE 失效 |
-| 东财(分红/日K/资金流/涨跌家数) | ✅ 接口与字段映射核对一致(push2his/push2/datacenter)。注:部分机房/海外出口对 `*.eastmoney.com` 可能间歇性受限,HTTP 层已加退避重试 |
-| 百度(分钟级资金流) | ✅ 采用零鉴权接口 `vapi/v1/fundflow` + `Origin/Referer: gushitong.baidu.com` 头,解析分钟级 `mainForce`(万)。**从国内/住宅 IP 可直接取数**;百度对机房/海外 IP 边缘层返回 403,此时按设计回落本地日级 `fund_flow` |
+| 东财(分红/日K/资金流/涨跌家数) | ✅ 字段映射核对一致。涨跌家数用 `push2/ulist.np`(secids)+ Referer;资金流用**多 URL 回退**(push2/push2his × http/https);分红走 `datacenter`。HTTP 层对连接错误/超时/5xx 网关错退避重试 |
+| 百度(分钟级资金流) | ✅ 零鉴权接口 `vapi/v1/fundflow` + `Origin/Referer: gushitong.baidu.com` 头,解析分钟级 `mainForce`(万)。**国内/住宅 IP 可直接取数**;机房/海外 IP 被百度边缘层 403,此时按设计回落本地日级 `fund_flow` |
 
 > 验证命令(在本机正常网络下):
 > ```bash
@@ -124,3 +124,21 @@ uv run pytest
 > PYTHONPATH=. uv run python scripts/verify_eastmoney.py 600519
 > PYTHONPATH=. uv run python scripts/verify_baidu.py 600519
 > ```
+
+### 网络韧性与代理排查
+
+适配器层(`app/sources/`)按"数据源会抖"设计,并参考同仓 `stocktrace` 项目的实战经验:
+
+- **多 URL 回退**:东财资金流/日K 依次尝试 `push2` / `push2his`、`http` / `https`,任一可达即用。
+- **退避重试**:连接重置、超时、502/503/504 网关错自动重试(不重试 4xx 与其它 5xx)。
+- **逐项失败隔离**:低频刷新单只/单项失败不中断;盘中资金流失败回落本地日级 `fund_flow`;涨跌家数缺失则该字段为空——app 始终可用。
+
+常见现象:**本机 V2Ray/Clash 等代理(`http_proxy`/`https_proxy`/`all_proxy` 环境变量)对部分 `*.eastmoney.com` 主机间歇性 502/重置**,而腾讯/新浪/datacenter 正常。排查:
+
+```bash
+env | grep -i proxy                       # 确认是否有本机代理
+# 若在国内,给数据域名设直连最稳:
+export NO_PROXY="eastmoney.com,gtimg.cn,sina.com.cn,sina.cn,baidu.com,qq.com,$NO_PROXY"
+```
+
+或在代理客户端给 `*.eastmoney.com` 设 direct 规则 / 换节点。容器/服务器部署时,建议用国内出口(海外 IP 会触发百度 403、部分东财主机重置)。
