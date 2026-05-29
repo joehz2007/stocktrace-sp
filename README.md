@@ -106,6 +106,21 @@ uv run pytest
 
 核心逻辑(指标口径、信号差分、解析、邮件去重、补算)重点覆盖;适配器用录制夹具做解析单测,不打真实网络。
 
-## 数据源口径备注
+## 数据源核对结论
 
-`app/sources/sina.py`、`baidu.py`、`tencent.py` 中带 `NOTE for maintainer` 的部分:解析→落库契约已用夹具锁定并测通,但真实线上端点的字段名/字段位需用一次真实请求确认后再微调映射,不影响上层逻辑。
+适配器解析→落库契约用录制夹具锁定并测通;字段映射已对真实接口逐个核对(脚本在 `scripts/verify_*.py`,可自行复跑)。
+
+| 数据源 | 核对结论 |
+|---|---|
+| 腾讯(行情/搜索/指数) | ✅ 实测核准。字段位与单位经真实数据验证:`amount_wan` 万元、`market_cap_yi`[45]/`float_market_cap_yi`[44] 亿元(用总市值≥流通市值的国有大盘股区分确认)、`pe_static`[53](经茅台 EPS 反算确认) |
+| 新浪(财报三表) | ✅ 实测核准。tab 分隔 CSV,标签 `资产总计/负债合计/归属于母公司股东权益合计/归属于母公司所有者的净利润` 命中。**已修复**:新浪日期为 `YYYYMMDD`,归一化为 `YYYY-MM-DD`,否则 `metrics._report_month` 取错月份致 ROE 失效 |
+| 东财(分红/日K/资金流/涨跌家数) | ✅ 接口与字段映射核对一致(push2his/push2/datacenter)。注:部分机房/海外出口对 `*.eastmoney.com` 可能间歇性受限,HTTP 层已加退避重试 |
+| 百度(分钟级资金流) | ✅ 采用零鉴权接口 `vapi/v1/fundflow` + `Origin/Referer: gushitong.baidu.com` 头,解析分钟级 `mainForce`(万)。**从国内/住宅 IP 可直接取数**;百度对机房/海外 IP 边缘层返回 403,此时按设计回落本地日级 `fund_flow` |
+
+> 验证命令(在本机正常网络下):
+> ```bash
+> PYTHONPATH=. uv run python scripts/verify_tencent.py 600519
+> PYTHONPATH=. uv run python scripts/verify_sina.py 600519
+> PYTHONPATH=. uv run python scripts/verify_eastmoney.py 600519
+> PYTHONPATH=. uv run python scripts/verify_baidu.py 600519
+> ```
