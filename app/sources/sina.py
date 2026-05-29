@@ -24,9 +24,20 @@ _INCOME_URL = ("https://money.finance.sina.com.cn/corp/go.php/vDOWN_ProfitStatem
                "displaytype/4/stockid/{code}/ctrl/all.phtml")
 
 
+def normalize_report_date(value):
+    """Sina serves report dates as YYYYMMDD; the rest of the system (and the
+    manual CLI `financial` command) uses YYYY-MM-DD. metrics._report_month reads
+    report_date[5:7], so an un-dashed date silently breaks ROE. Normalize here."""
+    if value and len(value) == 8 and value.isdigit():
+        return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
+    return value
+
+
 def parse_financial(payload: dict) -> dict:
     """Normalize a decoded financial payload into the fields we persist."""
-    return {k: payload.get(k) for k in _KEYS}
+    out = {k: payload.get(k) for k in _KEYS}
+    out["report_date"] = normalize_report_date(out["report_date"])
+    return out
 
 
 def _parse_sina_csv(text: str) -> tuple[list[str], dict[str, list[str]]]:
