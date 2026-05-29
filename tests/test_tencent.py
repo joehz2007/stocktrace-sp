@@ -14,8 +14,14 @@ def test_parse_quote_basic():
 
 
 def test_parse_search():
-    raw = 'v_hint="sh600519~贵州茅台~GZMT~1,sz000858~五粮液~WLY~1";'
+    # real smartbox format: market~code~name~pinyin~type, results joined by ^,
+    # name as \uXXXX unicode escapes (贵州茅台 / 五粮液)
+    raw = r'v_hint="sh~600519~贵州茅台~gzmt~GP-A^sz~000858~五粮液~wly~GP-A";'
     hits = parse_search(raw)
-    assert hits[0]["code"] == "600519"
-    assert hits[0]["name"] == "贵州茅台"
+    assert hits[0] == {"code": "600519", "name": "贵州茅台"}
     assert hits[1]["code"] == "000858"
+    assert hits[1]["name"] == "五粮液"
+
+
+def test_parse_search_empty():
+    assert parse_search('v_hint="";') == []

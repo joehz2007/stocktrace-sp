@@ -6,6 +6,7 @@ turnover_pct[38], pe_ttm[39], float_market_cap_yi[44], market_cap_yi[45] (亿元
 pb[46], volume_ratio[49], pe_static[53]. Re-run that script if the format changes.
 """
 import re
+import urllib.parse
 
 from app.sources.base import http_get
 
@@ -49,14 +50,27 @@ def parse_quote(raw: str) -> dict:
 
 
 def parse_search(raw: str) -> list[dict]:
-    m = re.search(r'v_hint="([^"]*)"', raw)
-    if not m or not m.group(1):
+    """smartbox 返回 v_hint="市场~代码~名称~拼音~类型^...";
+    多个结果用 ^ 分隔,名称是 \\uXXXX unicode 转义。"""
+    text = raw.strip()
+    if '="' in text:
+        text = text.split('="', 1)[1].rsplit('"', 1)[0]
+    if not text:
         return []
+    text = urllib.parse.unquote(text)
+    if "\\u" in text:  # smartbox escapes names as \uXXXX; only decode when present
+        try:
+            text = text.encode("utf-8").decode("unicode_escape")
+        except Exception:
+            pass
     hits = []
-    for item in m.group(1).split(","):
-        f = item.split("~")
-        if len(f) >= 2 and len(f[0]) >= 8:
-            hits.append({"code": f[0][2:], "name": f[1]})
+    for item in text.split("^"):
+        parts = item.split("~")
+        if len(parts) < 3:
+            continue
+        market, code, name = parts[0].lower(), parts[1], parts[2]
+        if market in ("sh", "sz", "bj") and code.isdigit() and len(code) == 6:
+            hits.append({"code": code, "name": name})
     return hits
 
 
