@@ -1,3 +1,10 @@
+"""Tencent quote/search/index adapter.
+
+Field indices in parse_quote were verified against live data (sh600519) via
+scripts/verify_tencent.py: price[3], change_pct[32], amount_wan[37] (万元),
+turnover_pct[38], pe_ttm[39], float_market_cap_yi[44], market_cap_yi[45] (亿元),
+pb[46], volume_ratio[49], pe_static[53]. Re-run that script if the format changes.
+"""
 import re
 
 from app.sources.base import http_get
