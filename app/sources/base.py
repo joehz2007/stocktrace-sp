@@ -22,8 +22,13 @@ def _get(url: str, *, params, timeout, headers) -> requests.Response:
             last_exc = exc  # transient: connection reset / proxy drop / timeout
             if attempt < _RETRIES:
                 time.sleep(_BACKOFF * attempt)
-        except requests.HTTPError:
-            raise  # genuine 4xx/5xx — do not retry
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
+            if status in (502, 503, 504) and attempt < _RETRIES:
+                last_exc = exc  # transient gateway/proxy error — retry
+                time.sleep(_BACKOFF * attempt)
+            else:
+                raise  # genuine 4xx (and 5xx other than gateway) — do not retry
     raise last_exc
 
 
