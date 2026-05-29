@@ -8,12 +8,34 @@ def test_dividend_yield_ttm():
         {"report_date": "2025-12-31", "announce_date": "2026-03-01", "pretax_bonus_per10": 30.0},
         {"report_date": "2025-12-31", "announce_date": "2026-02-01", "pretax_bonus_per10": 25.0},  # superseded
     ]
-    y = metrics.dividend_yield_ttm(dividends, total_shares=1.256e9, market_cap=2.0e12)
+    y = metrics.dividend_yield_ttm(dividends, total_shares=1.256e9, market_cap=2.0e12, as_of="2026-05-29")
     assert y == pytest.approx(3.0 * 1.256e9 / 2.0e12 * 100, rel=1e-6)
 
 
 def test_dividend_yield_none_when_no_market_cap():
     assert metrics.dividend_yield_ttm([], total_shares=1.0, market_cap=0) is None
+
+
+def test_dividend_yield_only_counts_trailing_year():
+    # only the report period within 365d of as_of counts; older years are excluded
+    dividends = [
+        {"report_date": "2025-12-31", "announce_date": "2026-03-01", "pretax_bonus_per10": 30.0},
+        {"report_date": "2024-12-31", "announce_date": "2025-03-01", "pretax_bonus_per10": 28.0},  # too old
+        {"report_date": "2023-12-31", "announce_date": "2024-03-01", "pretax_bonus_per10": 20.0},  # too old
+    ]
+    y = metrics.dividend_yield_ttm(dividends, total_shares=1.0e9, market_cap=1.0e12, as_of="2026-05-29")
+    # only the 2025-12-31 period (per10=30 -> 3.0/share) counts
+    assert y == pytest.approx(3.0 * 1.0e9 / 1.0e12 * 100, rel=1e-6)
+
+
+def test_dividend_yield_includes_interim_within_year():
+    # annual + interim within the trailing year are both summed
+    dividends = [
+        {"report_date": "2025-12-31", "announce_date": "2026-03-01", "pretax_bonus_per10": 30.0},
+        {"report_date": "2025-06-30", "announce_date": "2025-08-01", "pretax_bonus_per10": 10.0},
+    ]
+    y = metrics.dividend_yield_ttm(dividends, total_shares=1.0e9, market_cap=1.0e12, as_of="2026-05-29")
+    assert y == pytest.approx((3.0 + 1.0) * 1.0e9 / 1.0e12 * 100, rel=1e-6)
 
 
 def test_roe_annualization_q1():

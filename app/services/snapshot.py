@@ -36,7 +36,8 @@ def _build_snapshot(repo, code: str, quote: dict, baidu_fn, ts: str) -> dict:
     if market_cap_yi:
         dividends = [dict(d) for d in repo.dividends_for(code)]
         total_shares = market_cap_yi * 1e8 / price if price else 0
-        div_yield = metrics.dividend_yield_ttm(dividends, total_shares, market_cap_yi * 1e8)
+        div_yield = metrics.dividend_yield_ttm(dividends, total_shares, market_cap_yi * 1e8,
+                                               as_of=ts[:10])
 
     pe_dyn, pe_dyn_src = metrics.dynamic_pe(
         price, fc["forecast_eps"] if fc else None, market_cap_yi,

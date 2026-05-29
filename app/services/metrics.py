@@ -1,4 +1,6 @@
 """Pure indicator calculations. No IO. Return None when inputs are insufficient."""
+from datetime import date, timedelta
+from datetime import datetime
 
 
 def moving_average(closes: list[float], window: int) -> float | None:
@@ -59,18 +61,31 @@ def _latest_per_report_period(dividends: list[dict]) -> dict[str, dict]:
     return best
 
 
-def dividend_yield_ttm(dividends: list[dict], total_shares: float, market_cap: float) -> float | None:
+def dividend_yield_ttm(dividends: list[dict], total_shares: float, market_cap: float,
+                       as_of: str | None = None) -> float | None:
     """近一年报告期(含预案)现金分红总额 / 最近总市值 ×100%.
+
     pretax_bonus_per10 是每10股税前派息,先换算为每股 (/10)。
+    口径:只统计"近一年报告期"——以数据中最近一个报告期(report_date,不晚于 as_of)
+    为锚,纳入其往前 365 天内(不含整一年前那期)的所有报告期(年度+中期,含预案),
+    避免把多年分红累加导致虚高;锚定最近报告期而非今天,可避开年初新年报未披露时的
+    "空窗"。as_of 默认今天,用于排除晚于快照日的未来报告期。
     """
     if not market_cap:
         return None
+    upper = as_of or date.today().strftime("%Y-%m-%d")
     per_period = _latest_per_report_period(dividends)
+    valid = {rd: d for rd, d in per_period.items() if rd and rd <= upper}
+    if not valid:
+        return 0.0
+    latest = max(valid)
+    cutoff = (datetime.strptime(latest, "%Y-%m-%d").date() - timedelta(days=365)).strftime("%Y-%m-%d")
     total_cash = 0.0
-    for d in per_period.values():
+    for rd, d in valid.items():
+        if rd <= cutoff:  # strictly within one year of the latest report period
+            continue
         per10 = d.get("pretax_bonus_per10")
         if per10 is None:
             continue
-        per_share = per10 / 10.0
-        total_cash += per_share * total_shares
+        total_cash += (per10 / 10.0) * total_shares
     return total_cash / market_cap * 100
