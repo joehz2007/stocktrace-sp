@@ -21,11 +21,19 @@ def baidu_fn(code):
 
 
 def index_fn(market):
-    return tencent.fetch_index(market)
+    # Defensive: a data-source outage must not crash macro sync (the snapshot
+    # endpoints stay usable). macro.sync_macro treats {} as empty fields.
+    try:
+        return tencent.fetch_index(market)
+    except Exception:
+        return {}
 
 
 def breadth_fn(market):
-    return eastmoney.fetch_breadth(market)
+    try:
+        return eastmoney.fetch_breadth(market)
+    except Exception:
+        return {}
 
 
 def search_fn(keyword):
